@@ -3,6 +3,8 @@
 # @file: pc_dataset.py 
 
 import os
+import os.path as osp
+from cv2 import randShuffle
 import numpy as np
 from torch.utils import data
 import yaml
@@ -139,6 +141,44 @@ class SemKITTI_nusc(data.Dataset):
             data_tuple += (points[:, 3],)
         return data_tuple
 
+@register_dataset
+class SemKITTI_waymo(data.Dataset):
+    def __init__(self, data_path, imageset='train',
+                 return_ref=False, label_mapping="waymo.yaml", nusc=None):
+        self.return_ref = return_ref
+        self.imageset = imageset
+
+        try:
+            f = open(osp.join(data_path, 'SegSets', f'{imageset}.txt'), 'r')
+            self.pc_idx = f.readlines()
+            f.close()
+        except Exception as e :
+            print(e)
+
+        with open(label_mapping, 'r') as stream:
+            waymoyaml = yaml.safe_load(stream)
+        self.learning_map = waymoyaml['learning_map']
+        self.data_path = data_path
+
+
+    def __len__(self):
+        'Denotes the total number of samples'
+        return len(self.pc_idx)
+
+    def __getitem__(self, index):
+        if self.imageset in ['train', 'val', 'trainval']:  
+            lidar_path = osp.join(self.data_path, 'training/velodyne', self.pc_idx[index][:-1])
+            label_path = osp.join(self.data_path, 'training/label_seg', self.pc_idx[index][:-1])
+        else:
+            raise NotImplementedError('Split must be train/val/trainval')
+        points = np.fromfile(lidar_path, dtype=np.float32).reshape([-1,6])
+        points_label = np.fromfile(label_path, dtype=np.int16).reshape([-1,2])
+        # points_label = np.vectorize(self.learning_map.__getitem__)(points_label[:,1])
+        
+        data_tuple = (points[:, :3], points_label.astype(np.uint8))
+        if self.return_ref:
+            data_tuple += (points[:, 3],)
+        return data_tuple
 
 def absoluteFilePaths(directory):
     for dirpath, _, filenames in os.walk(directory):

@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-# author: Xinge
+# author: swc
 # @file: train_cylinder_asym.py
 
 
@@ -20,7 +20,7 @@ from config.config import load_config_data
 from utils.load_save_util import load_checkpoint
 
 import warnings
-
+import ipdb
 warnings.filterwarnings("ignore")
 
 
@@ -66,7 +66,6 @@ def main(args):
                                                                   train_dataloader_config,
                                                                   val_dataloader_config,
                                                                   grid_size=grid_size)
-
     # training
     epoch = 0
     best_val_miou = 0
@@ -159,7 +158,7 @@ def main(args):
 if __name__ == '__main__':
     # Training settings
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('-y', '--config_path', default='config/semantickitti.yaml')
+    parser.add_argument('-y', '--config_path', default='config/waymo.yaml')
     args = parser.parse_args()
 
     print(' '.join(sys.argv))
