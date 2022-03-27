@@ -66,6 +66,7 @@ def main(args):
                                                                   train_dataloader_config,
                                                                   val_dataloader_config,
                                                                   grid_size=grid_size)
+    # train_dataset_loader.dataset.__getitem__(0)
     # training
     epoch = 0
     best_val_miou = 0
