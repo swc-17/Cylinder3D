@@ -44,7 +44,7 @@ train_data_loader:
   data_path: "/media/swc/Mybook/data/waymo/kitti_format/"
   imageset: "train"
   return_ref: True
-  batch_size: 3
+  batch_size: 2
   shuffle: True
   num_workers: 8
 
