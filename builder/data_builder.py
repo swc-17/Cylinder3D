@@ -10,7 +10,8 @@ from dataloader.pc_dataset import get_pc_model_class
 def build(dataset_config,
           train_dataloader_config,
           val_dataloader_config,
-          grid_size=[480, 360, 32]):
+          grid_size=[480, 360, 32],
+          args=None):
     data_path = train_dataloader_config["data_path"]
     train_imageset = train_dataloader_config["imageset"]
     val_imageset = val_dataloader_config["imageset"]
@@ -53,15 +54,32 @@ def build(dataset_config,
         ignore_label=dataset_config["ignore_label"],
     )
 
+    if args.gpus > 1:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+                                                                train_dataset,
+                                                                num_replicas=args.world_size,
+                                                                rank=args.rank
+                                                                )
+        val_sampler = torch.utils.data.distributed.DistributedSampler(
+                                                                val_dataset,
+                                                                num_replicas=args.world_size,
+                                                                rank=args.rank
+                                                                )
+    else:
+        train_sampler = None
+        val_sampler = None
+
     train_dataset_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                        batch_size=train_dataloader_config["batch_size"],
                                                        collate_fn=collate_fn_BEV,
-                                                       shuffle=train_dataloader_config["shuffle"],
-                                                       num_workers=train_dataloader_config["num_workers"])
+                                                       shuffle=False,
+                                                       num_workers=train_dataloader_config["num_workers"],
+                                                       sampler=train_sampler)
     val_dataset_loader = torch.utils.data.DataLoader(dataset=val_dataset,
                                                      batch_size=val_dataloader_config["batch_size"],
                                                      collate_fn=collate_fn_BEV,
-                                                     shuffle=val_dataloader_config["shuffle"],
-                                                     num_workers=val_dataloader_config["num_workers"])
+                                                     shuffle=False,
+                                                     num_workers=val_dataloader_config["num_workers"],
+                                                     sampler=val_sampler)
 
     return train_dataset_loader, val_dataset_loader

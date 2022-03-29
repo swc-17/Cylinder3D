@@ -10,6 +10,9 @@ import sys
 import numpy as np
 import torch
 import torch.optim as optim
+import torch.multiprocessing as mp
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 
 from utils.metric_util import per_class_iu, fast_hist_crop
@@ -24,9 +27,8 @@ import ipdb
 warnings.filterwarnings("ignore")
 
 
-def main(args):
-    pytorch_device = torch.device('cuda:0')
-
+def main(rank, args):	 
+    args.rank = rank
     config_path = args.config_path
 
     configs = load_config_data(config_path)
@@ -56,17 +58,30 @@ def main(args):
     if os.path.exists(model_load_path):
         my_model = load_checkpoint(model_load_path, my_model)
 
-    my_model.to(pytorch_device)
+    # distributed training 
+    torch.cuda.set_device(rank)
+    my_model.cuda(rank)
+
+    if args.gpus > 1:                          
+        dist.init_process_group(                                   
+            backend='nccl',                                         
+            init_method='env://',                                   
+            world_size=args.gpus,                              
+            rank=rank                                               
+        )   
+        my_model = torch.nn.parallel.DistributedDataParallel(my_model, device_ids=[rank])
+
     optimizer = optim.Adam(my_model.parameters(), lr=train_hypers["learning_rate"])
 
     loss_func, lovasz_softmax = loss_builder.build(wce=True, lovasz=True,
                                                    num_class=num_class, ignore_label=ignore_label)
-
+                                            
     train_dataset_loader, val_dataset_loader = data_builder.build(dataset_config,
                                                                   train_dataloader_config,
                                                                   val_dataloader_config,
-                                                                  grid_size=grid_size)
-    # train_dataset_loader.dataset.__getitem__(0)
+                                                                  grid_size=grid_size,
+                                                                  args=args,
+                                                                )
     # training
     epoch = 0
     best_val_miou = 0
@@ -77,8 +92,6 @@ def main(args):
     while epoch < train_hypers['max_num_epochs']:
         loss_list = []
         pbar = tqdm(total=len(train_dataset_loader))
-        time.sleep(10)
-        # lr_scheduler.step(epoch)
         for i_iter, (_, train_vox_label, train_grid, _, train_pt_fea) in enumerate(train_dataset_loader):
             if global_iter % check_iter == 0 and epoch >= 1:
                 my_model.eval()
@@ -88,10 +101,10 @@ def main(args):
                     for i_iter_val, (_, val_vox_label, val_grid, val_pt_labs, val_pt_fea) in enumerate(
                             val_dataset_loader):
 
-                        val_pt_fea_ten = [torch.from_numpy(i).type(torch.FloatTensor).to(pytorch_device) for i in
+                        val_pt_fea_ten = [torch.from_numpy(i).type(torch.FloatTensor).cuda(rank) for i in
                                           val_pt_fea]
-                        val_grid_ten = [torch.from_numpy(i).to(pytorch_device) for i in val_grid]
-                        val_label_tensor = val_vox_label.type(torch.LongTensor).to(pytorch_device)
+                        val_grid_ten = [torch.from_numpy(i).cuda(rank) for i in val_grid]
+                        val_label_tensor = val_vox_label.type(torch.LongTensor).cuda(rank)
 
                         predict_labels = my_model(val_pt_fea_ten, val_grid_ten, val_batch_size)
                         # aux_loss = loss_fun(aux_outputs, point_label_tensor)
@@ -123,10 +136,10 @@ def main(args):
                 print('Current val loss is %.3f' %
                       (np.mean(val_loss_list)))
 
-            train_pt_fea_ten = [torch.from_numpy(i).type(torch.FloatTensor).to(pytorch_device) for i in train_pt_fea]
-            # train_grid_ten = [torch.from_numpy(i[:,:2]).to(pytorch_device) for i in train_grid]
-            train_vox_ten = [torch.from_numpy(i).to(pytorch_device) for i in train_grid]
-            point_label_tensor = train_vox_label.type(torch.LongTensor).to(pytorch_device)
+            train_pt_fea_ten = [torch.from_numpy(i).type(torch.FloatTensor).cuda(rank) for i in train_pt_fea]
+            # train_grid_ten = [torch.from_numpy(i[:,:2]).cuda(rank) for i in train_grid]
+            train_vox_ten = [torch.from_numpy(i).cuda(rank) for i in train_grid]
+            point_label_tensor = train_vox_label.type(torch.LongTensor).cuda(rank)
 
             # forward + backward + optimize
             outputs = my_model(train_pt_fea_ten, train_vox_ten, train_batch_size)
@@ -160,8 +173,16 @@ if __name__ == '__main__':
     # Training settings
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('-y', '--config_path', default='config/waymo.yaml')
+    parser.add_argument('-p', '--gpus', default=1, type=int,
+                        help='number of processes per node')
     args = parser.parse_args()
-
+    args.world_size = args.gpus
     print(' '.join(sys.argv))
     print(args)
-    main(args)
+                    
+    if args.gpus > 1:
+        os.environ['MASTER_ADDR'] = '127.0.0.1'              
+        os.environ['MASTER_PORT'] = '9999' 
+        mp.spawn(main, nprocs=args.gpus, args=(args,))         
+    else:
+        main(0, args)

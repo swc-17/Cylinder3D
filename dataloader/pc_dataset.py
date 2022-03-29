@@ -172,8 +172,8 @@ class SemKITTI_waymo(data.Dataset):
         else:
             raise NotImplementedError('Split must be train/val/trainval')
         points = np.fromfile(lidar_path, dtype=np.float32).reshape([-1,6])
+        # TODO generate seg label as int16
         points_label = np.fromfile(label_path, dtype=np.int16).reshape([-1,2])[:,1].reshape([-1,1])
-        # points_label = np.vectorize(self.learning_map.__getitem__)(points_label[:,1])
         
         data_tuple = (points[:, :3], points_label.astype(np.uint8))
         if self.return_ref:
