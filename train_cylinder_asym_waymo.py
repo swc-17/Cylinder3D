@@ -21,6 +21,7 @@ from builder import data_builder, model_builder, loss_builder
 from config.config import load_config_data
 
 from utils.load_save_util import load_checkpoint
+from utils.log_util import Logger
 
 import warnings
 import ipdb
@@ -48,7 +49,6 @@ def main(rank, args):
     ignore_label = dataset_config['ignore_label']
 
     model_load_path = train_hypers['model_load_path']
-    model_save_path = train_hypers['model_save_path']
 
     SemKITTI_label_name = get_SemKITTI_label_name(dataset_config["label_mapping"])
     unique_label = np.asarray(sorted(list(SemKITTI_label_name.keys())))[1:] - 1
@@ -83,6 +83,10 @@ def main(rank, args):
                                                                   args=args,
                                                                 )
     # training
+    logger = Logger('exp', rank)
+    os.system(f'cp {args.config_path} {logger.log_dir}')
+    model_save_path = logger.log_dir
+
     epoch = 0
     best_val_miou = 0
     my_model.train()
@@ -90,10 +94,13 @@ def main(rank, args):
     check_iter = train_hypers['eval_every_n_steps']
 
     while epoch < train_hypers['max_num_epochs']:
+        logger.write('epoch: {} |'.format(epoch))
+
         loss_list = []
         pbar = tqdm(total=len(train_dataset_loader))
         for i_iter, (_, train_vox_label, train_grid, _, train_pt_fea) in enumerate(train_dataset_loader):
-            if global_iter % check_iter == 0 and epoch >= 1:
+            if global_iter % check_iter == 0 and epoch >= 0:
+                print('start validating')
                 my_model.eval()
                 hist_list = []
                 val_loss_list = []
@@ -121,30 +128,33 @@ def main(rank, args):
                 my_model.train()
                 iou = per_class_iu(sum(hist_list))
                 print('Validation per class iou: ')
+                logger.write('Validation per class iou: \n')
                 for class_name, class_iou in zip(unique_label_str, iou):
-                    print('%s : %.2f%%' % (class_name, class_iou * 100))
+                    print('%s : %.2f%%\n' % (class_name, class_iou * 100))
+                    logger.write('%s : %.2f%%\n' % (class_name, class_iou * 100))
+                    logger.scalar_summary('val_{class_name}_iou', class_iou * 100, global_iter)
                 val_miou = np.nanmean(iou) * 100
+                logger.scalar_summary('val_miou', val_miou, global_iter)
                 del val_vox_label, val_grid, val_pt_fea, val_grid_ten
-
-                # save model if performance is improved
-                if best_val_miou < val_miou:
-                    best_val_miou = val_miou
-                    torch.save(my_model.state_dict(), model_save_path)
 
                 print('Current val miou is %.3f while the best val miou is %.3f' %
                       (val_miou, best_val_miou))
                 print('Current val loss is %.3f' %
                       (np.mean(val_loss_list)))
+                logger.write('Current val miou is %.3f while the best val miou is %.3f\n' %
+                      (val_miou, best_val_miou))
+                logger.write('Current val loss is %.3f\n' %
+                      (np.mean(val_loss_list)))                      
 
             train_pt_fea_ten = [torch.from_numpy(i).type(torch.FloatTensor).cuda(rank) for i in train_pt_fea]
-            # train_grid_ten = [torch.from_numpy(i[:,:2]).cuda(rank) for i in train_grid]
             train_vox_ten = [torch.from_numpy(i).cuda(rank) for i in train_grid]
             point_label_tensor = train_vox_label.type(torch.LongTensor).cuda(rank)
 
             # forward + backward + optimize
             outputs = my_model(train_pt_fea_ten, train_vox_ten, train_batch_size)
-            loss = lovasz_softmax(torch.nn.functional.softmax(outputs), point_label_tensor, ignore=0) + loss_func(
-                outputs, point_label_tensor)
+            loss0 = lovasz_softmax(torch.nn.functional.softmax(outputs), point_label_tensor, ignore=0)
+            loss1 = loss_func(outputs, point_label_tensor)
+            loss =  loss0 + loss1 
             loss.backward()
             optimizer.step()
             loss_list.append(loss.item())
@@ -153,33 +163,46 @@ def main(rank, args):
                 if len(loss_list) > 0:
                     print('epoch %d iter %5d, loss: %.3f\n' %
                           (epoch, i_iter, np.mean(loss_list)))
+                    logger.write('epoch %d iter %5d, loss: %.3f\n' %
+                          (epoch, i_iter, np.mean(loss_list)))
+                    logger.scalar_summary('train_loss', loss, global_iter)
+                    logger.scalar_summary('train_loss_lovasz', loss0, global_iter)
+                    logger.scalar_summary('train_loss_ce', loss1, global_iter)
                 else:
                     print('loss error')
 
             optimizer.zero_grad()
-            pbar.update(1)
+            if rank == 0:
+                pbar.update(1)
             global_iter += 1
             if global_iter % check_iter == 0:
                 if len(loss_list) > 0:
                     print('epoch %d iter %5d, loss: %.3f\n' %
                           (epoch, i_iter, np.mean(loss_list)))
+                    logger.write('epoch %d iter %5d, loss: %.3f\n' %
+                          (epoch, i_iter, np.mean(loss_list)))
+                    logger.scalar_summary('train_loss', loss, global_iter)
+                    logger.scalar_summary('train_loss_lovasz', loss0, global_iter)
+                    logger.scalar_summary('train_loss_ce', loss1, global_iter)
                 else:
                     print('loss error')
         pbar.close()
+        torch.save(my_model.state_dict(), f'{model_save_path}/{epoch}.pth')
         epoch += 1
 
 
 if __name__ == '__main__':
     # Training settings
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('-y', '--config_path', default='config/waymo.yaml')
-    parser.add_argument('-p', '--gpus', default=1, type=int,
-                        help='number of processes per node')
+    parser.add_argument('--data', default='waymo', type=str)
+    parser.add_argument('--gpus', default=1, type=int,
+                        help='number of gpus')
     args = parser.parse_args()
+
+    assert args.data in ['semantickitti', 'nuScenes', 'waymo'], 'Dataset not supported.'
+    args.config_path = f'config/{args.data}.yaml'
     args.world_size = args.gpus
-    print(' '.join(sys.argv))
-    print(args)
-                    
+
     if args.gpus > 1:
         os.environ['MASTER_ADDR'] = '127.0.0.1'              
         os.environ['MASTER_PORT'] = '9999' 
