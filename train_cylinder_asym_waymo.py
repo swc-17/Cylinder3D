@@ -101,7 +101,8 @@ def main(rank, args):
             pbar = tqdm(total=len(train_dataset_loader))
         for i_iter, (_, train_vox_label, train_grid, _, train_pt_fea) in enumerate(train_dataset_loader):
             if global_iter % check_iter == 0 and epoch >= 1:
-                print('start validating')
+                if rank == 0:
+                    print('start validating')
                 my_model.eval()
                 hist_list = []
                 val_loss_list = []
@@ -128,12 +129,13 @@ def main(rank, args):
                         val_loss_list.append(loss.detach().cpu().numpy())
                 my_model.train()
                 iou = per_class_iu(sum(hist_list))
-                print('Validation per class iou: ')
-                logger.write('Validation per class iou: \n')
-                for class_name, class_iou in zip(unique_label_str, iou):
-                    print('%s : %.2f%%\n' % (class_name, class_iou * 100))
-                    logger.write('%s : %.2f%%\n' % (class_name, class_iou * 100))
-                    logger.scalar_summary('val_{class_name}_iou', class_iou * 100, global_iter)
+                if rank == 0:
+                    print('Validation per class iou: ')
+                    logger.write('Validation per class iou: \n')
+                    for class_name, class_iou in zip(unique_label_str, iou):
+                        print('%s : %.2f%%\n' % (class_name, class_iou * 100))
+                        logger.write('%s : %.2f%%\n' % (class_name, class_iou * 100))
+                        logger.scalar_summary('val_{class_name}_iou', class_iou * 100, global_iter)
                 val_miou = np.nanmean(iou) * 100
                 logger.scalar_summary('val_miou', val_miou, global_iter)
                 del val_vox_label, val_grid, val_pt_fea, val_grid_ten
@@ -141,15 +143,15 @@ def main(rank, args):
                 if best_val_miou < val_miou:
                     best_val_miou = val_miou
                     torch.save(my_model.state_dict(), f'{model_save_path}/epoch_{epoch}_best.pth')
-
-                print('Current val miou is %.3f while the best val miou is %.3f' %
-                      (val_miou, best_val_miou))
-                print('Current val loss is %.3f' %
-                      (np.mean(val_loss_list)))
-                logger.write('Current val miou is %.3f while the best val miou is %.3f\n' %
-                      (val_miou, best_val_miou))
-                logger.write('Current val loss is %.3f\n' %
-                      (np.mean(val_loss_list)))                      
+                if rank == 0:
+                    print('Current val miou is %.3f while the best val miou is %.3f' %
+                        (val_miou, best_val_miou))
+                    print('Current val loss is %.3f' %
+                        (np.mean(val_loss_list)))
+                    logger.write('Current val miou is %.3f while the best val miou is %.3f\n' %
+                        (val_miou, best_val_miou))
+                    logger.write('Current val loss is %.3f\n' %
+                        (np.mean(val_loss_list)))                      
 
             train_pt_fea_ten = [torch.from_numpy(i).type(torch.FloatTensor).cuda(rank) for i in train_pt_fea]
             train_vox_ten = [torch.from_numpy(i).cuda(rank) for i in train_grid]
@@ -164,8 +166,8 @@ def main(rank, args):
             optimizer.step()
             loss_list.append(loss.item())
 
-            if global_iter % 1000 == 0:
-                if len(loss_list) > 0:
+            if global_iter % 1000 == 0 and rank == 0:
+                if len(loss_list) > 0 :
                     print('epoch %d iter %5d, loss: %.3f\n' %
                           (epoch, i_iter, np.mean(loss_list)))
                     logger.write('epoch %d iter %5d, loss: %.3f\n' %
@@ -180,7 +182,7 @@ def main(rank, args):
             if rank == 0:
                 pbar.update(1)
             global_iter += 1
-            if global_iter % check_iter == 0:
+            if global_iter % check_iter == 0 and rank == 0:
                 if len(loss_list) > 0:
                     print('epoch %d iter %5d, loss: %.3f\n' %
                           (epoch, i_iter, np.mean(loss_list)))
