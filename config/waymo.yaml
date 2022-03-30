@@ -64,5 +64,5 @@ train_params:
   model_save_path: "./models/model_save_waymo.pt"
   checkpoint_every_n_steps: 4599
   max_num_epochs: 40
-  eval_every_n_steps: 4599
+  eval_every_n_steps: 5000
   learning_rate: 0.001

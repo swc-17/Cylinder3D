@@ -14,7 +14,7 @@ import torch
 USE_TENSORBOARD = True
 try:
   import tensorboardX
-  print('Using tensorboardX')
+  # print('Using tensorboardX')
 except:
   USE_TENSORBOARD = False
 

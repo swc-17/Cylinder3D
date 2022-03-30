@@ -75,7 +75,7 @@ def main(rank, args):
 
     loss_func, lovasz_softmax = loss_builder.build(wce=True, lovasz=True,
                                                    num_class=num_class, ignore_label=ignore_label)
-                                            
+
     train_dataset_loader, val_dataset_loader = data_builder.build(dataset_config,
                                                                   train_dataloader_config,
                                                                   val_dataloader_config,
@@ -97,9 +97,10 @@ def main(rank, args):
         logger.write('epoch: {} |'.format(epoch))
 
         loss_list = []
-        pbar = tqdm(total=len(train_dataset_loader))
+        if rank == 0:
+            pbar = tqdm(total=len(train_dataset_loader))
         for i_iter, (_, train_vox_label, train_grid, _, train_pt_fea) in enumerate(train_dataset_loader):
-            if global_iter % check_iter == 0 and epoch >= 0:
+            if global_iter % check_iter == 0 and epoch >= 1:
                 print('start validating')
                 my_model.eval()
                 hist_list = []
@@ -136,6 +137,10 @@ def main(rank, args):
                 val_miou = np.nanmean(iou) * 100
                 logger.scalar_summary('val_miou', val_miou, global_iter)
                 del val_vox_label, val_grid, val_pt_fea, val_grid_ten
+
+                if best_val_miou < val_miou:
+                    best_val_miou = val_miou
+                    torch.save(my_model.state_dict(), f'{model_save_path}/epoch_{epoch}_best.pth')
 
                 print('Current val miou is %.3f while the best val miou is %.3f' %
                       (val_miou, best_val_miou))
@@ -186,8 +191,9 @@ def main(rank, args):
                     logger.scalar_summary('train_loss_ce', loss1, global_iter)
                 else:
                     print('loss error')
-        pbar.close()
-        torch.save(my_model.state_dict(), f'{model_save_path}/{epoch}.pth')
+        if rank == 0:
+            pbar.close()
+        torch.save(my_model.state_dict(), f'{model_save_path}/epoch_{epoch}.pth')
         epoch += 1
 
 
