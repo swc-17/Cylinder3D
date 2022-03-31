@@ -84,7 +84,8 @@ def main(rank, args):
                                                                 )
     # training
     logger = Logger('exp', rank)
-    os.system(f'cp {args.config_path} {logger.log_dir}')
+    if rank == 0:
+        os.system(f'cp {args.config_path} {logger.log_dir}')
     model_save_path = logger.log_dir
 
     epoch = 0
@@ -100,6 +101,7 @@ def main(rank, args):
         if rank == 0:
             pbar = tqdm(total=len(train_dataset_loader))
         for i_iter, (_, train_vox_label, train_grid, _, train_pt_fea) in enumerate(train_dataset_loader):
+            # validate
             if global_iter % check_iter == 0 and epoch >= 1:
                 if rank == 0:
                     print('start validating')
@@ -153,6 +155,7 @@ def main(rank, args):
                     logger.write('Current val loss is %.3f\n' %
                         (np.mean(val_loss_list)))                      
 
+            # train
             train_pt_fea_ten = [torch.from_numpy(i).type(torch.FloatTensor).cuda(rank) for i in train_pt_fea]
             train_vox_ten = [torch.from_numpy(i).cuda(rank) for i in train_grid]
             point_label_tensor = train_vox_label.type(torch.LongTensor).cuda(rank)
@@ -166,7 +169,7 @@ def main(rank, args):
             optimizer.step()
             loss_list.append(loss.item())
 
-            if global_iter % 1000 == 0 and rank == 0:
+            if global_iter % 10 == 0 and rank == 0:
                 if len(loss_list) > 0 :
                     print('epoch %d iter %5d, loss: %.3f\n' %
                           (epoch, i_iter, np.mean(loss_list)))
@@ -184,7 +187,7 @@ def main(rank, args):
             global_iter += 1
             if global_iter % check_iter == 0 and rank == 0:
                 if len(loss_list) > 0:
-                    print('epoch %d iter %5d, loss: %.3f\n' %
+                    print('epoch %d iter %5d, loss: %.3f' %
                           (epoch, i_iter, np.mean(loss_list)))
                     logger.write('epoch %d iter %5d, loss: %.3f\n' %
                           (epoch, i_iter, np.mean(loss_list)))
