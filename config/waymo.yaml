@@ -62,7 +62,7 @@ val_data_loader:
 train_params:
   model_load_path: "./models/model_load_waymo.pt"
   model_save_path: "./models/model_save_waymo.pt"
-  checkpoint_every_n_steps: 4599
+  checkpoint_every_n_steps: 1
   max_num_epochs: 40
   eval_every_n_steps: 1000
   learning_rate: 0.001

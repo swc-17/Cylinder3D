@@ -102,10 +102,12 @@ def main(rank, args):
         if rank == 0:
             pbar = tqdm(total=len(train_dataset_loader))
         for i_iter, (_, train_vox_label, train_grid, _, train_pt_fea) in enumerate(train_dataset_loader):
+            
             # validate
             if global_iter % check_iter == 0 and epoch >= 1:
                 if rank == 0:
                     print('start validating')
+                    pbar_val = tqdm(total=len(val_dataset_loader))
                 my_model.eval()
                 hist_list = []
                 val_loss_list = []
@@ -130,13 +132,21 @@ def main(rank, args):
                                                                 val_grid[count][:, 2]], val_pt_labs[count],
                                                             unique_label))
                         val_loss_list.append(loss.detach().cpu().numpy())
+                        if rank == 0:
+                            pbar_val.update(1)
+                if rank == 0:
+                    pbar_val.close()
                 my_model.train()
                 iou = per_class_iu(sum(hist_list))
+                for i  in range(iou.shape[0]):
+                    _iou = torch.tensor(iou[i]).cuda()
+                    dist.all_reduce(_iou, op=dist.reduce_op.SUM)
+                    _iou = _iou.cpu().numpy() / 4
+                    iou[i] = _iou
                 if rank == 0:
                     print('Validation per class iou: ')
                     logger.write('Validation per class iou: \n')
                     for class_name, class_iou in zip(unique_label_str, iou):
-                        class_iou = dist.all_reduce(torch.tensor(class_iou), op=dist.reduce_op.AVG).numpy()
                         print('%s : %.2f%%\n' % (class_name, class_iou * 100))
                         logger.write('%s : %.2f%%\n' % (class_name, class_iou * 100))
                         logger.scalar_summary(f'val_{class_name}_iou', class_iou * 100, global_iter)

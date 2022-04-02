@@ -566,6 +566,9 @@ class SemKITTI_waymo_multiscan(data.Dataset):
 # load Semantic KITTI class info
 
 def get_SemKITTI_label_name(label_mapping):
+    if 'nuScenes' in label_mapping:
+        return get_nuScenes_label_name(label_mapping)
+        
     with open(label_mapping, 'r') as stream:
         semkittiyaml = yaml.safe_load(stream)
     SemKITTI_label_name = dict()
