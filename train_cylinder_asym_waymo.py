@@ -3,6 +3,7 @@
 # @file: train_cylinder_asym.py
 
 
+from audioop import avg
 import os
 import time
 import argparse
@@ -135,9 +136,10 @@ def main(rank, args):
                     print('Validation per class iou: ')
                     logger.write('Validation per class iou: \n')
                     for class_name, class_iou in zip(unique_label_str, iou):
+                        class_iou = dist.all_reduce(torch.tensor(class_iou), op=dist.reduce_op.AVG).numpy()
                         print('%s : %.2f%%\n' % (class_name, class_iou * 100))
                         logger.write('%s : %.2f%%\n' % (class_name, class_iou * 100))
-                        logger.scalar_summary('val_{class_name}_iou', class_iou * 100, global_iter)
+                        logger.scalar_summary(f'val_{class_name}_iou', class_iou * 100, global_iter)
                 val_miou = np.nanmean(iou) * 100
                 logger.scalar_summary('val_miou', val_miou, global_iter)
                 del val_vox_label, val_grid, val_pt_fea, val_grid_ten
