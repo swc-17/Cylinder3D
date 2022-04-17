@@ -1,0 +1,35 @@
+add waymo dataset multiscan support
+add data aug 
+add label mapping
+change volume space
+add new trainging schedule
+sk multiscan calib
+waymo format submission
+
+
+2022-04-02-18-25: Validation per class iou: 
+2022-04-02-18-25: Car : 92.42%
+2022-04-02-18-25: Truck : 56.04%
+2022-04-02-18-25: Bus : 72.75%
+2022-04-02-18-25: Other Vehicle : 17.18%
+2022-04-02-18-25: Motorcyclistr : 0.00%
+2022-04-02-18-25: Bicyclist : 60.45%
+2022-04-02-18-25: Pedestrian : 81.98%
+2022-04-02-18-25: Sign : 58.19%
+2022-04-02-18-25: Traffic Light : 18.42%
+2022-04-02-18-25: Pole : 58.96%
+2022-04-02-18-25: Construction Cone : 51.82%
+2022-04-02-18-25: Bicycle : 49.95%
+2022-04-02-18-25: Motorcycle : 61.36%
+2022-04-02-18-25: Building : 89.80%
+2022-04-02-18-25: Vegetation : 83.38%
+2022-04-02-18-25: Tree Trunk : 54.96%
+2022-04-02-18-25: Curb : 57.18%
+2022-04-02-18-25: Road : 90.46%
+2022-04-02-18-25: Lane Marker : 44.76%
+2022-04-02-18-25: Other Ground : 36.29%
+2022-04-02-18-25: Walkable : 70.32%
+2022-04-02-18-25: Sidewalk : 66.62%
+2022-04-02-18-25: Current val miou is 57.878 while the best val miou is 57.878
+2022-04-02-18-25: Current val loss is 0.713
+

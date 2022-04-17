@@ -167,8 +167,8 @@ class SemKITTI_waymo(data.Dataset):
 
     def __getitem__(self, index):
         if self.imageset in ['train', 'val', 'trainval']:  
-            lidar_path = osp.join(self.data_path, 'training/velodyne', self.pc_idx[index][:-1])
-            label_path = osp.join(self.data_path, 'training/label_seg', self.pc_idx[index][:-1])
+            lidar_path = osp.join(self.data_path, 'training/velodyne', self.pc_idx[index][:-1]+'.bin')
+            label_path = osp.join(self.data_path, 'training/label_seg', self.pc_idx[index][:-1]+'.bin')
         else:
             raise NotImplementedError('Split must be train/val/trainval')
         points = np.fromfile(lidar_path, dtype=np.float32).reshape([-1,6])
@@ -203,7 +203,7 @@ def SemKITTI2train_single(label):
 from os.path import join
 @register_dataset
 class SemKITTI_sk_multiscan(data.Dataset):
-    def __init__(self, data_path, imageset='train',return_ref=False, label_mapping="semantic-kitti-multiscan.yaml"):
+    def __init__(self, data_path, imageset='train',return_ref=False, label_mapping="semantic-kitti-multiscan.yaml", nusc=None):
         self.return_ref = return_ref
         with open(label_mapping, 'r') as stream:
             semkittiyaml = yaml.safe_load(stream)
@@ -384,7 +384,7 @@ class SemKITTI_sk_multiscan(data.Dataset):
         return data_tuple
 
 class SemKITTI_waymo_multiscan(data.Dataset):
-    def __init__(self, data_path, imageset='train',return_ref=False, label_mapping="waymo.yaml"):
+    def __init__(self, data_path, imageset='train',return_ref=False, label_mapping="waymo.yaml", nusc=None):
         self.return_ref = return_ref
         with open(label_mapping, 'r') as stream:
             semkittiyaml = yaml.safe_load(stream)

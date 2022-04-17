@@ -25,7 +25,6 @@ from utils.load_save_util import load_checkpoint
 from utils.log_util import Logger
 
 import warnings
-import ipdb
 warnings.filterwarnings("ignore")
 
 
@@ -83,6 +82,8 @@ def main(rank, args):
                                                                   grid_size=grid_size,
                                                                   args=args,
                                                                 )
+    train_dataset_loader.dataset.__getitem__(10)
+    
     # training
     logger = Logger('exp', rank)
     if rank == 0:
@@ -173,6 +174,8 @@ def main(rank, args):
             point_label_tensor = train_vox_label.type(torch.LongTensor).cuda(rank)
 
             # forward + backward + optimize
+            import ipdb
+            ipdb.set_trace()
             outputs = my_model(train_pt_fea_ten, train_vox_ten, train_batch_size)
             loss0 = lovasz_softmax(torch.nn.functional.softmax(outputs), point_label_tensor, ignore=0)
             loss1 = loss_func(outputs, point_label_tensor)
@@ -183,7 +186,7 @@ def main(rank, args):
 
             if global_iter % 10 == 0 and rank == 0:
                 if len(loss_list) > 0 :
-                    print('epoch %d iter %5d, loss: %.3f\n' %
+                    print('epoch %d iter %5d, loss: %.3f' %
                           (epoch, i_iter, np.mean(loss_list)))
                     logger.write('epoch %d iter %5d, loss: %.3f\n' %
                           (epoch, i_iter, np.mean(loss_list)))

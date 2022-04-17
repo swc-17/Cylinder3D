@@ -1,1 +1,1 @@
-python -u train_cylinder_asym_nuscenes.py --gpus 1 --data waymo
+python -u train_cylinder_asym_waymo.py --gpus 1 --data nuScenes

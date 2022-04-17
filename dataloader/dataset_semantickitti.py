@@ -195,6 +195,8 @@ class cylinder_dataset(data.Dataset):
         elif len(data) == 3:
             xyz, labels, sig = data
             if len(sig.shape) == 2: sig = np.squeeze(sig)
+        elif len(data) == 4:
+            xyz, labels, sig, origin_len = data
         else:
             raise Exception('Return invalid data tuple')
 
@@ -266,6 +268,8 @@ class cylinder_dataset(data.Dataset):
         if len(data) == 2:
             return_fea = return_xyz
         elif len(data) == 3:
+            return_fea = np.concatenate((return_xyz, sig[..., np.newaxis]), axis=1)
+        elif len(data) == 4:
             return_fea = np.concatenate((return_xyz, sig[..., np.newaxis]), axis=1)
 
         if self.return_test:
